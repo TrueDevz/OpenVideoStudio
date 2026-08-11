@@ -48,8 +48,28 @@ def generate_video_plan(prompt: str, duration: int = 15, provider: str = "gemini
                 raise ValueError("Gemini API key is required but not provided or found in environment variables.")
                 
         genai.configure(api_key=api_key)
-        # Use gemini-1.5-flash as it's fast, free-tier friendly, and great at JSON
-        model = genai.GenerativeModel('gemini-1.5-flash', generation_config={"response_mime_type": "application/json"})
+        
+        # Try finding an available model, favoring 1.5 flash
+        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        
+        # Priority order for models
+        preferred_models = ['models/gemini-1.5-flash', 'models/gemini-1.5-flash-latest', 'models/gemini-pro', 'models/gemini-1.0-pro']
+        selected_model = None
+        
+        for pref in preferred_models:
+            if pref in available_models:
+                selected_model = pref
+                break
+                
+        if not selected_model:
+            selected_model = available_models[0] if available_models else 'gemini-1.5-flash'
+            
+        print(f"Using Gemini model: {selected_model}")
+        
+        # response_mime_type is supported in 1.5 models. For 1.0 pro we just use normal generation.
+        generation_config = {"response_mime_type": "application/json"} if "1.5" in selected_model else {}
+        
+        model = genai.GenerativeModel(selected_model, generation_config=generation_config)
         response = model.generate_content(system_prompt)
         
         try:
