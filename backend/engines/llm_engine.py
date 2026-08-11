@@ -31,7 +31,7 @@ def generate_video_plan(prompt: str, duration: int = 15, provider: str = "gemini
           "duration": 4,
           "narration_text": "The exact script to be spoken in this scene in the detected language.",
           "visual_description": "A short English description of what should be shown on screen.",
-          "search_query": "A 1-3 word English search query to find stock footage for this scene on Pexels (e.g., 'artificial intelligence', 'happy family')."
+          "search_query": "A 1-2 word STRICTLY ENGLISH search query for Pexels (e.g., 'robot', 'future', 'happy'). Do not use long phrases or Telugu words."
         }}
       ]
     }}
