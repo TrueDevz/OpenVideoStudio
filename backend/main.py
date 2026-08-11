@@ -81,11 +81,11 @@ async def api_generate_video(request: VideoRequest):
         os.makedirs(temp_dir, exist_ok=True)
         
         # 1. Combine narration & generate audio
-        from engines.tts_engine import generate_audio
+        from engines.tts_engine import generate_audio_async
         full_text = " ".join([scene.get("narration_text", "") for scene in scenes])
         audio_path = os.path.join(temp_dir, "audio.mp3")
         print("Generating audio...")
-        generate_audio(full_text, audio_path, language)
+        await generate_audio_async(full_text, audio_path, language)
         
         # 2. Generate subtitles
         from engines.subtitle_engine import generate_srt

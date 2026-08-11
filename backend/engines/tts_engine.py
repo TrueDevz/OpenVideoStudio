@@ -11,7 +11,7 @@ except ImportError:
 # English India Female: en-IN-NeerjaNeural
 # English India Male: en-IN-PrabhatNeural
 
-async def _generate_audio_async(text: str, output_path: str, language: str = "te") -> str:
+async def generate_audio_async(text: str, output_path: str, language: str = "te") -> str:
     if not edge_tts:
         raise ImportError("edge-tts package is not installed.")
         
@@ -34,7 +34,7 @@ def generate_audio(text: str, output_path: str, language: str = "te") -> str:
     Generates speech audio from text using Edge-TTS.
     Saves the audio to output_path (should be .mp3).
     """
-    return asyncio.run(_generate_audio_async(text, output_path, language))
+    return asyncio.run(generate_audio_async(text, output_path, language))
 
 # For local testing
 if __name__ == "__main__":
