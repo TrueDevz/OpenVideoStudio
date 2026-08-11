@@ -54,9 +54,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const originalText = generateVideoBtn.innerHTML;
-            generateVideoBtn.innerHTML = '<i class="ph ph-spinner-gap spinner"></i> Rendering...';
+            generateVideoBtn.innerHTML = '<i class="ph ph-spinner-gap spinner"></i> Starting Job...';
             
             try {
+                // 1. Start the job
                 const response = await fetch('/api/generate_video', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -64,11 +65,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 const data = await response.json();
                 
-                if (data.status === 'success') {
-                    generateVideoBtn.innerHTML = '<i class="ph-fill ph-check-circle"></i> Video Ready!';
-                    generateVideoBtn.style.background = 'var(--success)';
-                    console.log("Video URL:", data.video_url);
-                    // Update video player src here
+                if (data.status === 'accepted') {
+                    const jobId = data.job_id;
+                    
+                    // 2. Poll for status
+                    const pollInterval = setInterval(async () => {
+                        const statusRes = await fetch(`/api/job/${jobId}`);
+                        const statusData = await statusRes.json();
+                        
+                        if (statusData.status === 'processing') {
+                            generateVideoBtn.innerHTML = `<i class="ph ph-spinner-gap spinner"></i> ${statusData.message || 'Rendering...'}`;
+                        } else if (statusData.status === 'success') {
+                            clearInterval(pollInterval);
+                            generateVideoBtn.innerHTML = '<i class="ph-fill ph-check-circle"></i> Video Ready!';
+                            generateVideoBtn.style.background = 'var(--success)';
+                            console.log("Video URL:", statusData.video_url);
+                            
+                            // Optional: open it in a new tab for now
+                            window.open(statusData.video_url, '_blank');
+                            
+                            setTimeout(() => {
+                                generateVideoBtn.innerHTML = originalText;
+                                generateVideoBtn.style.background = '';
+                            }, 5000);
+                        } else if (statusData.status === 'error') {
+                            clearInterval(pollInterval);
+                            throw new Error(statusData.message);
+                        }
+                    }, 3000);
+                    
                 } else {
                     throw new Error(data.message);
                 }
@@ -76,12 +101,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error(error);
                 generateVideoBtn.innerHTML = '<i class="ph-fill ph-x-circle"></i> Error';
                 generateVideoBtn.style.background = '#ef4444';
+                setTimeout(() => {
+                    generateVideoBtn.innerHTML = originalText;
+                    generateVideoBtn.style.background = '';
+                }, 3000);
             }
-            
-            setTimeout(() => {
-                generateVideoBtn.innerHTML = originalText;
-                generateVideoBtn.style.background = '';
-            }, 3000);
         });
     }
 });

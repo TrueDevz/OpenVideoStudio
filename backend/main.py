@@ -59,44 +59,47 @@ async def api_generate_plan(request: PlanRequest):
 
 import time
 from fastapi.staticfiles import StaticFiles
+from fastapi import BackgroundTasks
+import uuid
+import json
 
 # Create output directory for final videos
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
 
-@app.post("/api/generate_video")
-async def api_generate_video(request: VideoRequest):
+# Simple in-memory job store for demo purposes
+jobs = {}
+
+async def process_video_job(job_id: str, plan: dict):
+    jobs[job_id] = {"status": "processing", "message": "Starting rendering..."}
     try:
-        plan = request.plan
         language = plan.get("language", "te")
         scenes = plan.get("scenes", [])
         
         if not scenes:
             raise ValueError("No scenes found in the plan.")
 
-        import uuid
-        job_id = str(uuid.uuid4())[:8]
         temp_dir = os.path.join(BASE_DIR, "temp", job_id)
         os.makedirs(temp_dir, exist_ok=True)
         
         # 1. Combine narration & generate audio
+        jobs[job_id]["message"] = "Generating AI Voiceover..."
         from engines.tts_engine import generate_audio_async
         full_text = " ".join([scene.get("narration_text", "") for scene in scenes])
         audio_path = os.path.join(temp_dir, "audio.mp3")
-        print("Generating audio...")
         await generate_audio_async(full_text, audio_path, language)
         
         # 2. Generate subtitles
+        jobs[job_id]["message"] = "Transcribing subtitles with Whisper..."
         from engines.subtitle_engine import generate_srt
         srt_path = os.path.join(temp_dir, "subtitles.srt")
-        print("Generating subtitles...")
         generate_srt(audio_path, srt_path, model_size="base")
         
         # 3. Download stock videos
+        jobs[job_id]["message"] = "Fetching free stock footage..."
         from engines.asset_engine import search_stock_video, download_video
         video_paths = []
-        print("Downloading stock videos...")
         for i, scene in enumerate(scenes):
             query = scene.get("search_query", "technology")
             video_url = search_stock_video(query, orientation="portrait")
@@ -105,21 +108,34 @@ async def api_generate_video(request: VideoRequest):
             video_paths.append(scene_path)
             
         # 4. Compose final video
+        jobs[job_id]["message"] = "Rendering final video (FFmpeg)..."
         from engines.video_engine import compose_video
         final_filename = f"final_video_{job_id}.mp4"
         final_path = os.path.join(OUTPUT_DIR, final_filename)
-        print("Composing video...")
         compose_video(video_paths, audio_path, final_path, srt_path)
         
-        return {
-            "status": "success", 
-            "message": "Video rendered successfully!",
-            "video_url": f"/output/{final_filename}"
-        }
+        jobs[job_id]["status"] = "success"
+        jobs[job_id]["video_url"] = f"/output/{final_filename}"
+        jobs[job_id]["message"] = "Video rendered successfully!"
+        
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return {"status": "error", "message": str(e)}
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["message"] = str(e)
+
+
+@app.post("/api/generate_video")
+async def api_generate_video(request: VideoRequest, background_tasks: BackgroundTasks):
+    job_id = str(uuid.uuid4())[:8]
+    background_tasks.add_task(process_video_job, job_id, request.plan)
+    return {"status": "accepted", "job_id": job_id, "message": "Video rendering started in background."}
+
+@app.get("/api/job/{job_id}")
+async def get_job_status(job_id: str):
+    if job_id in jobs:
+        return jobs[job_id]
+    return {"status": "error", "message": "Job not found"}
 
 # --- Static File Serving (Frontend) ---
 # Mount the frontend directory to serve all static files (index.html, css, js)
