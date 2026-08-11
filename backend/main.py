@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import sys
 
 app = FastAPI(title="OpenVideoStudio API", version="1.0.0")
 
@@ -15,12 +16,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Base directories
+# Ensure backend directory is in sys.path so 'engines' can be imported regardless of execution path
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
+
 FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend")
 
 from pydantic import BaseModel
 import asyncio
+from fastapi.responses import FileResponse, Response
 
 # --- Models ---
 class PlanRequest(BaseModel):
@@ -33,6 +38,10 @@ class VideoRequest(BaseModel):
     # Additional options can be added here
 
 # --- API Endpoints ---
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204) # No content, prevents 404 logs
 
 @app.get("/api/status")
 async def get_status():
